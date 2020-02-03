@@ -18,7 +18,10 @@ import Svg exposing (Svg)
 import Svg.Attributes as Attributes
 import Task
 
-type YUpCoordinates = YUpCoordinates
+
+type YUpCoordinates
+    = YUpCoordinates
+
 
 type alias Model =
     { window : BoundingBox2d Pixels YUpCoordinates
@@ -43,10 +46,9 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    (
-        { window = BoundingBox2d.from Point2d.origin Point2d.origin
-        , points = []
-        }
+    ( { window = BoundingBox2d.from Point2d.origin Point2d.origin
+      , points = []
+      }
     , Task.perform GotViewport Browser.Dom.getViewport
     )
 
@@ -93,7 +95,7 @@ update msg model =
         GotViewport { scene, viewport } ->
             ( { model | window = bboxFromViewport viewport }
             , bboxFromViewport viewport
-                |> Poisson.sample 30
+                |> Poisson.sample 50 (Pixels.pixels 50)
                 |> Random.generate RandomPoint
             )
 

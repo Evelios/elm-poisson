@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Angle
-import BoundingBox2d
+import BoundingBox2d exposing (BoundingBox2d)
 import Browser
 import Browser.Dom
 import Browser.Events
@@ -13,20 +13,23 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Poisson
 import Quantity exposing (Quantity)
+import Random
 import Svg exposing (Svg)
 import Svg.Attributes as Attributes
 import Task
 
+type YUpCoordinates = YUpCoordinates
 
 type alias Model =
-    { width : Quantity Float Pixels
-    , height : Quantity Float Pixels
+    { window : BoundingBox2d Pixels YUpCoordinates
+    , points : List (Point2d Pixels YUpCoordinates)
     }
 
 
 type Msg
     = GotViewport Browser.Dom.Viewport
     | WindowResize Float Float
+    | RandomPoint (List (Point2d Pixels YUpCoordinates))
 
 
 main =
@@ -40,9 +43,10 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { width = Pixels.pixels 0
-      , height = Pixels.pixels 0
-      }
+    (
+        { window = BoundingBox2d.from Point2d.origin Point2d.origin
+        , points = []
+        }
     , Task.perform GotViewport Browser.Dom.getViewport
     )
 
@@ -58,21 +62,18 @@ view model =
         pixelsAsString x =
             String.fromInt <| round <| Pixels.inPixels x
 
-        boundingBox =
-            BoundingBox2d.from Point2d.origin (Point2d.xy model.width model.height)
-
         points =
-            Poisson.sample 10 boundingBox
+            model.points
                 |> List.map drawCircle
     in
     Svg.svg
-        [ Attributes.width <| pixelsAsString model.width
-        , Attributes.height <| pixelsAsString model.height
+        [ Attributes.width <| pixelsAsString (BoundingBox2d.maxX model.window)
+        , Attributes.height <| pixelsAsString (BoundingBox2d.maxY model.window)
         ]
         points
 
 
-drawCircle : Point2d Pixels Float -> Svg msg
+drawCircle : Point2d Pixels YUpCoordinates -> Svg msg
 drawCircle center =
     Svg.circle2d
         [ Attributes.fill "black" ]
@@ -81,19 +82,27 @@ drawCircle center =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        boundingBox width height =
+            BoundingBox2d.from Point2d.origin (Point2d.xy width height)
+
+        bboxFromViewport viewport =
+            boundingBox (Pixels.pixels viewport.width) (Pixels.pixels viewport.height)
+    in
     case msg of
         GotViewport { scene, viewport } ->
-            ( { model
-                | width = Pixels.pixels viewport.width
-                , height = Pixels.pixels viewport.height
-              }
-            , Cmd.none
+            ( { model | window = bboxFromViewport viewport }
+            , bboxFromViewport viewport
+                |> Poisson.sample 30
+                |> Random.generate RandomPoint
             )
 
         WindowResize width height ->
-            ( { model
-                | width = Pixels.pixels width
-                , height = Pixels.pixels height
-              }
+            ( { model | window = boundingBox (Pixels.pixels width) (Pixels.pixels height) }
+            , Cmd.none
+            )
+
+        RandomPoint points ->
+            ( { model | points = points }
             , Cmd.none
             )
